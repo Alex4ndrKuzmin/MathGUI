@@ -20,6 +20,11 @@ private:
 
 protected:
 
+    // Содержит только фигуры
+    QVector<QSharedPointer<IGeometryItem>> geometryFigures;
+
+    // Содержит абсолютно все items на полотне,
+    // включая те, из которых состоят фигуры
     QVector<QSharedPointer<IGeometryItem>> geometryItems;
 
 public:
@@ -31,22 +36,32 @@ public:
 
     void AddGeometryItem(QSharedPointer<IGeometryItem> item)
     {
+        AddGeometryItem(item, false);
+    }
+
+protected:
+
+    void AddGeometryItem(QSharedPointer<IGeometryItem> item, bool subItem)
+    {
         connect(this, SIGNAL(MousePressEvent_signal(QMouseEvent*)), item.get(), SLOT(MousePressEvent(QMouseEvent*)));
         connect(this, SIGNAL(MouseMoveEvent_signal(QMouseEvent*)), item.get(), SLOT(MouseMoveEvent(QMouseEvent*)));
         connect(this, SIGNAL(MouseReleaseEvent_signal(QMouseEvent*)), item.get(), SLOT(MouseReleaseEvent(QMouseEvent*)));
         connect(this, SIGNAL(ContextMenuEvent_signal(QContextMenuEvent*)), item.get(), SLOT(ContextMenuEvent(QContextMenuEvent*)));
         connect(item.get(), SIGNAL(StateChanged_signal(IGraphicLine*, ItemState)), this, SLOT(ItemStateChanged(IGraphicLine*, ItemState)));
+
+        if (!subItem)
+        {
+            geometryFigures.append(item);
+        }
         geometryItems.append(item);
 
         auto childItems = item->ChildItems();
         for (int i = 0; i < childItems.size(); ++i)
         {
             auto childItem = childItems[i];
-            AddGeometryItem(childItem);
+            AddGeometryItem(childItem, true);
         }
     }
-
-protected:
 
     void mousePressEvent(QMouseEvent* event) override
     {
@@ -72,8 +87,8 @@ protected:
         QPainter painter;
         painter.begin(this);
         painter.setRenderHint(QPainter::HighQualityAntialiasing);
-        for (int i = 0; i < geometryItems.size(); ++i)
-            geometryItems[i]->Draw(painter);
+        for (int i = 0; i < geometryFigures.size(); ++i)
+            geometryFigures[i]->Draw(painter);
         painter.end();
     }
 

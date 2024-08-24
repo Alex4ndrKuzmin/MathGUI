@@ -1,6 +1,6 @@
 TEMPLATE = subdirs
 
-SUBDIRS = mathlib mathgui mathtest guitest
+SUBDIRS = mathlib mathgui guitest
 
 mathgui.depends = mathlib
 guitest.depends = mathgui

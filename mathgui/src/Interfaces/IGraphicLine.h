@@ -11,7 +11,7 @@
 
 enum ItemState
 {
-    normal = 0, cursorAbove, hooked, editing, contexMenuOpened, another
+    normal = 0, cursorAbove, hooked, another
 };
 
 ///
@@ -35,6 +35,8 @@ protected:
 
     QBrush brush = QBrush(QColor(0, 0, 0, 0));
 
+    bool show = true;
+
     double spread = 3;
 
 public:
@@ -53,9 +55,6 @@ public:
             break;
         case ItemState::hooked:
             pen = hookedPen;
-            break;
-        case ItemState::editing:
-            pen = editingPen;
             break;
         case ItemState::another:
             pen = anotherPen;
@@ -144,9 +143,26 @@ public:
         return spread;
     }
 
-    virtual void Draw(QPainter& painter) = 0;
+    void Draw(QPainter& painter)
+    {
+        return_if(!show);
+        _Draw(painter);
+    }
+
+    virtual void Hide()
+    {
+        show = false;
+    }
+
+    virtual void Show()
+    {
+        show = true;
+    }
+
 
 protected:
+
+    virtual void _Draw(QPainter& painter) = 0;
 
 signals:
 

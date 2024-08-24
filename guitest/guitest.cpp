@@ -43,10 +43,17 @@ int main(int argc, char** argv)
 
     QPolygonF poly3 = poly.intersected(poly2);
 
-    //QSharedPointer<LineSegmentItem> segment(new LineSegmentItem(&canvas));
-    //segment->SetFirstPoint(20, 100);
-    //segment->SetSecondPoint(40, 120);
-    //canvas.AddGeometryItem(segment);
+    QSharedPointer<LineSegmentItem> segment(new LineSegmentItem(&canvas));
+    segment->SetFirstPoint(20, 100);
+    segment->SetSecondPoint(40, 120);
+    segment->LockLength();
+    canvas.AddGeometryItem(segment);
+
+    QSharedPointer<LineSegmentItem> segment2(new LineSegmentItem(&canvas));
+    segment2->SetFirstPoint(segment->SecondPointPointer());
+    segment2->SetSecondPoint(40 + 30, 120 + 30);
+    segment2->LockLength();
+    canvas.AddGeometryItem(segment2);
 
     return app.exec();
 }

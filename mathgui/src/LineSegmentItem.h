@@ -11,55 +11,34 @@
 
 class LineSegmentItem : public IGeometryItem, public LineSegment, public ObjectCounter
 {
+    Q_OBJECT
 protected:
 
     QSharedPointer<PointItem> pointItem1;
     QSharedPointer<PointItem> pointItem2;
 
+    bool lockFirstPointFlag = false;
+    bool lockSecondPointFlag = false;
+    bool lockLengthFlag = false;
+
+    double lockedLength = 0;
+
 public:
     explicit LineSegmentItem(QObject *parent = nullptr);
+    ~LineSegmentItem() {};
 
-    void Draw(QPainter& painter) override
+    void Hide() override
     {
-        return_if(!show);
-        return_if(point1.isNull());
-        return_if(point2.isNull());
-        return_if(pointItem1.isNull());
-        return_if(pointItem1.isNull());
-
-        pointItem1->Draw(painter);
-        pointItem2->Draw(painter);
-
-        painter.setPen(pen);
-        painter.setBrush(brush);
-        painter.drawLine(*point1, *point2);
+        show = false;
+        pointItem1->Hide();
+        pointItem2->Hide();
     }
 
-    bool CursorAbove(QPointF position) override
+    void Show() override
     {
-        return IsPointOnSegment(position);
-    }
-
-    void Scale(double scale) override
-    {
-        //radius *= scale;
-    }
-
-    void Move(QPointF vector) override
-    {
-        *point1 = *point1 + vector;
-        *point2 = *point2 + vector;
-
-        //bounds.setTopLeft(bounds.topLeft() + vector);
-    }
-
-    void Rotate(double angle) override
-    {
-        // Либо так и останется пустым, либо в случае, если
-        // делать функционал сектора окружности в этом же классе,
-        // добавить поворот.
-
-        qDebug() << "angle = " << angle;
+        show = true;
+        pointItem1->Show();
+        pointItem2->Show();
     }
 
     using LineSegment::SetFirstPoint;
@@ -84,6 +63,58 @@ public:
     QSharedPointer<PointItem> SecondPointItem()
     {
         return pointItem2;
+    }
+
+    void BindPoints()
+    {
+        connect(pointItem1.get(), SIGNAL(Moved_signal(QPointF)), this, SLOT(FirstPointMoved(QPointF)));
+        connect(pointItem2.get(), SIGNAL(Moved_signal(QPointF)), this, SLOT(SecondPointMoved(QPointF)));
+    }
+
+    void UntiePoints()
+    {
+        disconnect(pointItem1.get(), SIGNAL(Moved_signal(QPointF)), this, SLOT(FirstPointMoved(QPointF)));
+        disconnect(pointItem2.get(), SIGNAL(Moved_signal(QPointF)), this, SLOT(SecondPointMoved(QPointF)));
+    }
+
+    void LockFirstPoint()
+    {
+        lockFirstPointFlag = true;
+    }
+
+    void UnlockFirstPoint()
+    {
+        lockFirstPointFlag = false;
+    }
+
+    void LockSecondPoint()
+    {
+        lockSecondPointFlag = true;
+    }
+
+    void UnlockSecondPoint()
+    {
+        lockSecondPointFlag = false;
+    }
+
+    void LockLength()
+    {
+        lockLengthFlag = true;
+        lockedLength = Length();
+        pointItem1->LastPositionAlwaysInPointFlag(true);
+        pointItem2->LastPositionAlwaysInPointFlag(true);
+        connect(pointItem1.get(), SIGNAL(Moved_signal(QPointF)), this, SLOT(FirstPointMoved(QPointF)));
+        connect(pointItem2.get(), SIGNAL(Moved_signal(QPointF)), this, SLOT(SecondPointMoved(QPointF)));
+    }
+
+    void UnlockLength()
+    {
+        lockLengthFlag = false;
+        lockedLength = 0;
+        pointItem1->LastPositionAlwaysInPointFlag(false);
+        pointItem2->LastPositionAlwaysInPointFlag(false);
+        disconnect(pointItem1.get(), SIGNAL(Moved_signal(QPointF)), this, SLOT(FirstPointMoved(QPointF)));
+        disconnect(pointItem2.get(), SIGNAL(Moved_signal(QPointF)), this, SLOT(SecondPointMoved(QPointF)));
     }
 
     bool IsPointOnSegment(QPointF& point)
@@ -172,6 +203,106 @@ protected:
     {
         figureName = "line_segment";
     }
+
+    void _Draw(QPainter& painter) override
+    {
+        return_if(point1.isNull());
+        return_if(point2.isNull());
+        return_if(pointItem1.isNull());
+        return_if(pointItem1.isNull());
+
+        painter.setPen(pen);
+        painter.setBrush(brush);
+        painter.drawLine(*point1, *point2);
+
+        pointItem1->Draw(painter);
+        pointItem2->Draw(painter);
+    }
+
+    bool _CursorAbove(QPointF position) override
+    {
+        return show ? IsPointOnSegment(position) : false;
+    }
+
+    void _Scale(double scale, QPointF scalingPoint) override
+    {
+        return_if(!show);
+        *point1 = (*point1 - scalingPoint) * scale + scalingPoint;
+        *point2 = (*point2 - scalingPoint) * scale + scalingPoint;
+    }
+
+    void _Move(QPointF vector) override
+    {
+        return_if(!show);
+
+        if (!lockFirstPointFlag)
+            *point1 = *point1 + vector;
+
+        if (!lockSecondPointFlag)
+            *point2 = *point2 + vector;
+    }
+
+    void _Rotate(double angle) override
+    {
+        return_if(!show);
+        // Либо так и останется пустым, либо в случае, если
+        // делать функционал сектора окружности в этом же классе,
+        // добавить поворот.
+
+        qDebug() << "angle = " << angle;
+    }
+
+    void UpdateItemBounds() override
+    {
+        double minX = qMin(point1->x(), point2->x());
+        double minY = qMin(point1->y(), point2->y());
+        double maxX = qMax(point1->x(), point2->x());
+        double maxY = qMax(point1->y(), point2->y());
+        bounds = QRect(minX, minY, maxX - minX, maxY - minY);
+    }
+
+protected slots:
+
+    void FirstPointMoved(QPointF vector)
+    {
+        if (lockLengthFlag)
+        {
+            if (Length() == 0)
+            {
+                *point1 = *point1 - vector;
+                return;
+            }
+
+            QPointF oldPosition = *point1 - vector;
+            double oldLength = QLineF(*point2, oldPosition).length();
+            *point1 = *point2 - (*point2 - *point1) / Length() * oldLength;
+            return;
+        }
+
+        pointItem2->SetPoint(pointItem2->GetPoint() + vector);
+    }
+
+    void SecondPointMoved(QPointF vector)
+    {
+        if (lockLengthFlag)
+        {
+            if (Length() == 0)
+            {
+                *point2 = *point2 - vector;
+                return;
+            }
+
+            QPointF oldPosition = *point2 - vector;
+            double oldLength = QLineF(*point1, oldPosition).length();
+            *point2 = *point1 - (*point1 - *point2) / Length() * oldLength;
+            return;
+        }
+
+        pointItem1->SetPoint(pointItem1->GetPoint() + vector);
+    }
+
+
+
 };
 
 #endif // LINESEGMENTITEM_H

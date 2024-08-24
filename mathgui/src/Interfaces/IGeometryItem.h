@@ -23,13 +23,10 @@ class IGeometryItem : public IGraphicLine
     Q_OBJECT
 private:
 
-    QPoint lastPosition = QPoint(-1, -1);
 
 protected:
 
     QVector<QSharedPointer<IGeometryItem>> childItems;
-
-    bool show = true;
 
     QString figureName = "";
     QString objectName = "";
@@ -37,8 +34,11 @@ protected:
     QRectF bounds;
 
     bool cursorAbove = false;
+    bool editing = false;
 
     QSharedPointer<QMenu> menu;
+
+    QPointF lastPosition = QPointF(0, 0);
 
 public:
     explicit IGeometryItem(QObject *parent = nullptr);
@@ -53,16 +53,6 @@ public:
         childItems.append(item);
     }
 
-    virtual void Hide()
-    {
-        show = false;
-    }
-
-    virtual void Show()
-    {
-        show = true;
-    }
-
     virtual void SetCursorAboveFlag(bool flag)
     {
         cursorAbove = flag;
@@ -73,31 +63,69 @@ public:
         return cursorAbove;
     }
 
-    ///
-    /// \brief Метод возвращает true, если
-    /// point находится в пределах описывающей
-    /// прямоугольной области объекта, расширенной
-    /// на extend единиц без её изменения.
-    /// \return
-    ///
-    bool ContainsExt(QPointF point, double extend = 0)
+    virtual void SetEditingFlag(bool flag)
     {
-        QRectF extendedBound = QRectF(
-                    bounds.left() - extend,
-                    bounds.top() - extend,
-                    bounds.right() + extend,
-                    bounds.bottom() + extend);
-        return extendedBound.contains(point);
+        editing = flag;
     }
 
-    virtual bool CursorAbove(QPointF position) = 0;
-    virtual void Scale(double scale) = 0;
-    virtual void Rotate(double angle) = 0;
-    virtual void Move(QPointF vector) = 0;
+    virtual bool EditingFlag()
+    {
+        return editing;
+    }
+
+    //TODO: Переместить в отдельный файл
+    QRectF ExtendRect(QRectF rect, double extend)
+    {
+        return QRectF(rect.left() - extend,
+                        rect.top() - extend,
+                        rect.width() + 2*extend,
+                        rect.height() + 2*extend);
+    }
+
+    bool CursorAbove(QPointF position)
+    {
+        return show ? _CursorAbove(position) : false;
+    }
+
+    void Scale(double scale, QPointF scalingPoint = QPointF(0, 0))
+    {
+        return_if(!show);
+        _Scale(scale, scalingPoint);
+        UpdateItemBounds();
+        emit Scaled_signal(scale);
+    }
+
+    void Rotate(double angle)
+    {
+        return_if(!show);
+        _Rotate(angle);
+        UpdateItemBounds();
+        emit Rotated_signal(angle);
+    }
+
+    void Move(QPointF vector)
+    {
+        return_if(!show);
+        _Move(vector);
+        UpdateItemBounds();
+        emit Moved_signal(vector);
+    }
 
 protected:
 
     virtual void InitFigureName() = 0;
+    virtual void UpdateItemBounds() = 0;
+    virtual bool _CursorAbove(QPointF position) = 0;
+    virtual void _Scale(double scale, QPointF scalingPoint) = 0;
+    virtual void _Rotate(double angle) = 0;
+    virtual void _Move(QPointF vector) = 0;
+
+    // Эти методы стоит переопределять, если в производном классе
+    // требуется как-либо дополнительно обработать соответствующее действие
+
+    virtual void AdditionalMousePressAction(QMouseEvent*) {};
+    virtual void AdditionalMovePressAction(QMouseEvent*) {};
+    virtual void AdditionalReleasePressAction(QMouseEvent*) {};
 
 signals:
 
@@ -117,15 +145,13 @@ public slots:
             {
                 SetState(ItemState::hooked);
             }
-            else if (state == ItemState::editing)
-            {
-                SetState(ItemState::normal);
-            }
+
             break;
         }
         default:
             break;
         }
+        AdditionalMousePressAction(event);
     }
 
 
@@ -137,6 +163,7 @@ public slots:
             // Объект захвачен мышкой -> перемещаем вслед за курсором
             Move(event->pos() - lastPosition);
         }
+
         else
         {
             SetState( cursorAbove ?
@@ -144,6 +171,7 @@ public slots:
                       ItemState::normal );
         }
         lastPosition = event->pos();
+        AdditionalMovePressAction(event);
     }
 
     virtual void MouseReleaseEvent(QMouseEvent* event)
@@ -161,6 +189,7 @@ public slots:
         default:
             break;
         }
+        AdditionalReleasePressAction(event);
     }
 
     virtual void ContextMenuEvent(QContextMenuEvent* pe)
@@ -168,7 +197,6 @@ public slots:
         if (state == ItemState::cursorAbove)
         {
             menu->exec(pe->globalPos());
-            state = ItemState::contexMenuOpened;
         }
     }
 };
