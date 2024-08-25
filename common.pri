@@ -14,6 +14,7 @@ OBJECTS_DIR = $${_PRO_FILE_PWD_}/bin/$${OS_SUFFIX}/$${BUILD_FLAG}/.obj
 MOC_DIR = $${_PRO_FILE_PWD_}/bin/$${OS_SUFFIX}/$${BUILD_FLAG}/.moc
 RCC_DIR = $${_PRO_FILE_PWD_}/bin/$${OS_SUFFIX}/$${BUILD_FLAG}/.rcc
 UI_DIR = $${_PRO_FILE_PWD_}/bin/$${OS_SUFFIX}/$${BUILD_FLAG}/.ui
+MAKEFILE = $${_PRO_FILE_PWD_}/bin/$${OS_SUFFIX}/$${BUILD_FLAG}/Makefile
 
 linux-q++: QMAKE_CXXFLAGS += -std=c++11
 
